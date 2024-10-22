@@ -6,6 +6,7 @@ use App\Http\Controllers\CsvImportController;
 use App\Http\Controllers\BVNController;
 use App\Http\Controllers\ValidateSwiftController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\ElectricityPaymentController;
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -19,7 +20,7 @@ use App\Http\Controllers\AuthController;
 
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
-});   
+});
 
 Route::post('/upload-csv', [CsvImportController::class, 'upload'])->name('csv.upload');
 Route::post('bvn/verify/{userId}', [BVNController::class, 'verify'])->name('bvn.verify');
@@ -27,3 +28,6 @@ Route::post('bvn/verify/{userId}', [BVNController::class, 'verify'])->name('bvn.
 Route::post('/swift/validate', [ValidateSwiftController::class, 'validateSwift'])->name('swift.validate');
 // Handle login form submission
 Route::post('/login', [AuthController::class, 'login'])->name('login.post');
+
+Route::post('/electrical-payment', [ElectricityPaymentController::class, 'makeElectricityPayment'])->name('electric.payment');
+
