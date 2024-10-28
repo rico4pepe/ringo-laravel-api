@@ -7,6 +7,7 @@ use App\Http\Controllers\BVNController;
 use App\Http\Controllers\ValidateSwiftController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ElectricityPaymentController;
+use App\Http\Controllers\LoginController;
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -31,3 +32,5 @@ Route::post('/login', [AuthController::class, 'login'])->name('login.post');
 
 Route::post('/electrical-payment', [ElectricityPaymentController::class, 'makeElectricityPayment'])->name('electric.payment');
 
+
+Route::post('/signin', [LoginController::class, 'signin'])->name('signin.post');

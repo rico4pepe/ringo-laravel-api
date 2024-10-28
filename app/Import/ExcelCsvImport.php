@@ -12,9 +12,12 @@ class ExcelCsvImport{
     protected $failCount = 0;
     protected $errors = [];
 
-    public function __construct($batchSize = 500)
+    protected $ordinaryMessage; // New variable for ordinary message
+
+    public function __construct($batchSize = 500, $ordinaryMessage = null)
     {
         $this->batchSize = $batchSize;
+        $this->ordinaryMessage = $ordinaryMessage ?? "Dear customer, please fund your account for uninterrupted services.";
     }
 
     public function importFile($filePath, $isCustomMessage)
@@ -65,6 +68,17 @@ class ExcelCsvImport{
     }
 }
 
+
+ // Format custom message for personalized SMS
+ public function formatCustomMessage($firstName, $accountNumber, $date)
+ {
+     // Mask all but the last 4 digits of the account number
+     $maskedAccountNumber = $this->maskAccountNumber($accountNumber);
+
+     // Return the formatted message
+     return "Dear {$firstName}, fund your account {$maskedAccountNumber} on {$date} and enjoy the benefits of banking with UBA. You can request an instant ATM card at any of our branches.";
+ }
+
     protected function processData($rowData, $isCustomMessage)
     {
         $firstName = $rowData[0]; // Assuming first name is in index 0
@@ -72,10 +86,14 @@ class ExcelCsvImport{
         $date = $rowData[2];
         if ($isCustomMessage) {
             // Apply custom message template
-            return "Dear {$firstName}, fund your account {$accountNumber} on {$date} and enjoy the benefits of banking with UBA. You can request an instant ATM card at any of our branches.";
+            return $this->formatCustomMessage($firstName, $accountNumber, $date);
+           // return "Dear {$firstName}, fund your account {$accountNumber} on {$date} and enjoy the benefits of banking with UBA. You can request an instant ATM card at any of our branches.";
         } else {
             // Apply ordinary message
-            return "Dear customer, please fund your account for uninterrupted services.";
+            return [
+                'phoneNumber' => $rowData[3],
+                'message' => $this->ordinaryMessage
+            ];
         }
     }
 
@@ -111,5 +129,15 @@ class ExcelCsvImport{
     ]);
 }
 
+
+public function sendSmsDirectly($phoneNumber, $message)
+{
+    $apiUrl = 'https://api.example.com/send-sms';
+
+    return Http::post($apiUrl, [
+        'phoneNumber' => $phoneNumber,
+        'message' => $message,
+    ])->successful();
+}
 
 }

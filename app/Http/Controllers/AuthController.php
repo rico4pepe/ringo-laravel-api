@@ -17,6 +17,7 @@ class AuthController extends Controller
     {
         return view('auth.login'); // Adjust the path as necessary
     }
+    
 
      // Handle the login request
      public function login(Request $request)
@@ -34,13 +35,13 @@ class AuthController extends Controller
             'device_info' => '45gg',
         ];
 
-        
+
          // Send the credentials to the external API
          $response = Http::post('https://www.api.ringo.ng/api/appmidLogininin', $credentials);
 
          // Log the response
          Log::info('API Response', ['status' => $response->status(), 'body' => $response->body()]);
-    
+
 
          if ($response->successful()) {
             // Assuming the response contains user information, extract it
@@ -61,7 +62,7 @@ class AuthController extends Controller
             'success' => false,
             'message' => 'Authentication failed with the external API.',
         ], 401); // 401 Unauthorized
- 
+
          // Attempt to log the user in
         //  if (Auth::attempt($request->only('email', 'password'))) {
         //      // Redirect to the intended page after login
@@ -75,7 +76,7 @@ class AuthController extends Controller
         //         'user' => $user, // Optionally include user data
         //     ]);
         //  }
- 
+
          // Return back with an error message
         //  return back()->withErrors([
         //      'email' => 'The provided credentials do not match our records.',

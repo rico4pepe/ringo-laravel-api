@@ -66,13 +66,13 @@ class User extends Authenticatable
          'print_amount_charged',
          'epinsprint',
          'app_token',
-         'web_hook', 
+         'web_hook',
          'referred_id',
          'providus_account',
          'rolez_account',
          'rolez_status',
          'sterling_account',
-         'sterling_reference', 
+         'sterling_reference',
           'sterling_status',
           'providus_reference',
           'providus_status',
@@ -89,9 +89,15 @@ class User extends Authenticatable
           'group_id',
           'transacting',
           'fire_hash',
-          'fire_failed' 
+          'fire_failed'
 
     ];
+
+
+    public function otps()
+    {
+        return $this->hasMany(Otp::class);
+    }
 
     /**
      * The attributes that should be hidden for serialization.
