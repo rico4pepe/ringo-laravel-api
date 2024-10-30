@@ -8,6 +8,10 @@ use App\Http\Controllers\ValidateSwiftController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ElectricityPaymentController;
 use App\Http\Controllers\LoginController;
+use App\Http\Controllers\ExcelCsvImportController;
+
+//use Illuminate\Support\Facades\Mail;
+//use App\Mail\OtpMail; // Adjust this according to your mail class
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -23,6 +27,8 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
 
+
+
 Route::post('/upload-csv', [CsvImportController::class, 'upload'])->name('csv.upload');
 Route::post('bvn/verify/{userId}', [BVNController::class, 'verify'])->name('bvn.verify');
 
@@ -34,3 +40,7 @@ Route::post('/electrical-payment', [ElectricityPaymentController::class, 'makeEl
 
 
 Route::post('/signin', [LoginController::class, 'signin'])->name('signin.post');
+
+Route::post('/verifyOtp', [LoginController::class, 'verifyOtp'])->name('verifyOtp.verify');
+Route::post('/resendOtp', [LoginController::class, 'resendOtp'])->name('resendOtp.resend');
+Route::post('/import', [ExcelCsvImportController::class, 'import']);

@@ -10,6 +10,9 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Exception;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Str;
+
 
 class LoginController extends Controller
 {
@@ -42,7 +45,7 @@ class LoginController extends Controller
                 ]);
 
                 // Send OTP via email
-                Mail::to($user->email)->send(new OtpMail($otp));
+                Mail::to($user->email)->send(new OtpMail($otp, $expiry));
 
                 Log::info("OTP sent to user ID {$user->id}");
 
@@ -51,7 +54,6 @@ class LoginController extends Controller
                     'message' => 'OTP sent to your email.',
                     'otp_required' => true,
                 ]);
-
             } catch (Exception $e) {
                 Log::error("Error sending OTP email to user ID {$user->id}: " . $e->getMessage());
 
@@ -121,6 +123,19 @@ class LoginController extends Controller
             ], 404);
         }
 
+
+    // Define a unique rate limit key for the user
+    $key = 'resend-otp:' . Str::lower($request->email);
+
+    // Apply rate limiting: e.g., 5 requests per minute
+    if (RateLimiter::tooManyAttempts($key, 5)) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Too many OTP requests. Please wait ' . RateLimiter::availableIn($key) . ' seconds.',
+        ], 429);
+    }
+
+
         // Delete existing or expired OTPs for this user
         Otp::where('user_id', $user->id)->delete();
 
@@ -133,7 +148,7 @@ class LoginController extends Controller
             ]);
 
             // Send new OTP
-            Mail::to($user->email)->send(new OtpMail($otp->otp_code));
+            Mail::to($user->email)->send(new OtpMail($otp->otp_code,  $otp->expires_at));
 
             Log::info("Resent OTP to user ID {$user->id}");
 
@@ -144,7 +159,7 @@ class LoginController extends Controller
 
         } catch (Exception $e) {
             Log::error("Error resending OTP email to user ID {$user->id}: " . $e->getMessage());
-
+            Auth::logout();
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to resend OTP. Please try again later.',

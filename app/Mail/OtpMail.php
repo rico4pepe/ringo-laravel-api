@@ -12,16 +12,19 @@ class OtpMail extends Mailable
     use Queueable, SerializesModels;
 
     public $otp;
+    public $expiry;
 
     /**
      * Create a new message instance.
-     *
-     * @param string $otp
+     * 
+      * @param string $otp
+     * @param \DateTime $expiry
      * @return void
      */
-    public function __construct($otp)
+    public function __construct($otp, $expiry)
     {
         $this->otp = $otp;
+        $this->expiry = $expiry;
     }
 
     /**

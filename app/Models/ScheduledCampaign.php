@@ -9,6 +9,8 @@ class ScheduledCampaign extends Model
 {
     use HasFactory;
 
+    protected $table = 'campaign';
+
     protected $fillable = [
         'campaign_title',
         'file_path',
@@ -17,5 +19,6 @@ class ScheduledCampaign extends Model
         'is_custom_message',
         'status',
         'summary',
+        'unique_reference',
     ];
 }
