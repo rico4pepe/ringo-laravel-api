@@ -8,4 +8,16 @@ use Illuminate\Database\Eloquent\Model;
 class Sms extends Model
 {
     use HasFactory;
+
+    protected $table = 'sms';
+
+
+    
+    protected $fillable = [
+        'firstname',
+        'lastname',
+        'phone_number',
+        'message',
+        
+    ];
 }

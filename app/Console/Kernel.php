@@ -15,7 +15,7 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule)
     {
-        // $schedule->command('inspire')->hourly();
+        $schedule->command('campaign:process')->everyMinute();
     }
 
     /**
@@ -25,8 +25,13 @@ class Kernel extends ConsoleKernel
      */
     protected function commands()
     {
+        // Load all console commands
         $this->load(__DIR__.'/Commands');
+
+        // Register the ClearLogs command specifically
+        //$this->command('logs:clear', \App\Console\Commands\ClearLogs::class);
 
         require base_path('routes/console.php');
     }
 }
+ 

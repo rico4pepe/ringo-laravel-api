@@ -18,7 +18,7 @@ class CreateSmsTable extends Migration
             $table->string('firstname');
             $table->string('lastname');
             $table->string('phone_number');
-            $table->text('message');
+            $table->text('message')->nullable();
             $table->date('date');
             $table->timestamps();
         });

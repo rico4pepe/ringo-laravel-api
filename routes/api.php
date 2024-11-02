@@ -43,4 +43,4 @@ Route::post('/signin', [LoginController::class, 'signin'])->name('signin.post');
 
 Route::post('/verifyOtp', [LoginController::class, 'verifyOtp'])->name('verifyOtp.verify');
 Route::post('/resendOtp', [LoginController::class, 'resendOtp'])->name('resendOtp.resend');
-Route::post('/import', [ExcelCsvImportController::class, 'import']);
+Route::post('/import', [ExcelCsvImportController::class, 'import'])->name('import.excel');
