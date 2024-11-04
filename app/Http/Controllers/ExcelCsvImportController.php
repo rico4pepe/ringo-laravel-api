@@ -98,6 +98,13 @@ public function sendSingleSms(Request $request)
            // Sanitize the ordinaryMessage
          $ordinaryMessage = strip_tags($ordinaryMessage);
         $ordinaryMessage = htmlspecialchars($ordinaryMessage, ENT_QUOTES, 'UTF-8');
+
+        Log::info('Incoming SMS request:', $request->all());
+
+        Log::info('Received input', [
+            'isCustomMessage' => $isCustomMessage,
+            'ordinaryMessage' => $ordinaryMessage,
+        ]);
     try {
         // Create a single record array
         $singleRecord = [
@@ -109,12 +116,13 @@ public function sendSingleSms(Request $request)
         ];
 
         // Call the sendSingleSms method in your service
-        $response = $this->importService->sendSingleSms(data: $singleRecord);
+        $response = $this->importService->sendSingleSmsWithSave($singleRecord, $isCustomMessage);
 
-        if ($response->successful()) {
+        if ($response && $response['status'] === true) { // Adjusted to check status
             return response()->json(['message' => 'SMS sent successfully.'], 200);
         } else {
-            return response()->json(['error' => 'Failed to send SMS.'], 500);
+            $error = $response['error'] ?? 'Failed to send SMS.';
+            return response()->json(['error' => $error], 500);
         }
     } catch (\Exception $e) {
         Log::error("Error sending single SMS: " . $e->getMessage());

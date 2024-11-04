@@ -128,7 +128,15 @@ class ExcelCsvImport {
     protected function saveToDatabase(array $chunk) {
         try {
              Log::info("Saving chunk to database:", $chunk);
+             //$insertedIds = []; // Array to hold the IDs of inserted records
             Sms::insert($chunk); // Batch insert for efficiency
+
+            // Retrieve the IDs of the newly inserted records and add to chunk line 134 to 138 was added to achieve  the retrieave id
+            // This should be made more effective in a concurent anvironmen we should consider unique identifier (like a UUID) for each record or a timestamp to ensure you can
+        $insertedIds = Sms::latest()->take(count($chunk))->pluck('id')->toArray();
+        foreach ($chunk as $index => &$record) {
+            $record['db_id'] = $insertedIds[$index];
+        }
             Log::info("Successfully saved chunk of " . count($chunk));
         } catch (\Exception $e) {
             $this->failCount += count(value: $chunk);
@@ -158,58 +166,199 @@ class ExcelCsvImport {
     protected function sendSmsToApi($data) {
 
 
-        $apiUrl = 'https://api.example.com/send-sms';
+        $apiUrl = '';
 
         return Http::post($apiUrl, [
             'reciever' => $data['phone_number'],
             'text' => $data['message'],
             'sender' => 'UBA',
-            //'request_id' => $data[''],
+            'request_id' => $data['db_id'], // Using the database ID we added
         ]);
     }
 
 
 
 
-    public function sendSingleSms($data)
+    public function sendSingleSms(array $smsData)
 {
+    $apiUrl = 'https://ubasms.approot.ng/php/bulksms.php?' .
+        http_build_query([
+            'receiver' => $smsData['receiver'],
+            'text' => $smsData['text'],
+            'sender' => $smsData['sender'],
+            'request_id' => $smsData['request_id'],
+        ]);;
 
-    // Adjusted to accommodate single SMS sending
-    $apiUrl = 'https://api.example.com/send-sms';
-
-    return Http::post($apiUrl, [
-        'phoneNumber' => $data['phone_number'],
-        'message' => $data['message'],
+    // Prepare JSON data
+    $jsonData =  http_build_query([
+        'receiver' => $smsData['receiver'],
+        'text' => $smsData['text'],
+        'sender' => $smsData['sender'],
+        'request_id' => $smsData['request_id'],
     ]);
+
+    // Initialize cURL
+    $ch = curl_init($apiUrl);
+
+    // Set cURL options
+    // curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
+    // curl_setopt($ch, CURLOPT_POSTFIELDS, $jsonData);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Content-Type: application/json',
+    ]);
+
+
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+
+    // Execute cURL request
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE); // Get HTTP status code
+
+    // Check for cURL errors
+    if (curl_errno($ch)) {
+        $error_msg = curl_error($ch);
+        Log::error("cURL Error for SMS request_id {$smsData['request_id']}: " . $error_msg);
+    } else {
+        // Log the response
+        Log::info("API Response for SMS request_id {$smsData['request_id']}: " . $response);
+    }
+
+     // Extract status code and message from the response
+$statusMessage = trim($response); // Clean the response
+$parts = explode(':', $statusMessage); // Split the response by ':'
+
+// Initialize variables for status code and message
+$statusCode = null;
+$message = null;
+
+// Check if parts have at least two elements
+if (count($parts) === 3) {
+    $statusCode = trim($parts[1]); // Get the status code (first part)
+    $message = trim($parts[2]); // Get the message (second part)
 }
 
-protected function saveSingleToDatabase(array $data, $isCustomMessage)
+  // Store response in database
+  $updateData = [
+    'status_code' => $statusCode,
+    'api_message' => $message,
+    'updated_at' => now()
+];
+
+Sms::where('id', $smsData['request_id'])->update($updateData);
+     
+     Log::info("API Response for SMS request_id {$smsData['request_id']}:  the status code: {$statusCode} : message: {$message}" . print_r($parts) . "count parts " . count($parts) );
+
+     // confirm if its divided into two
+     
+     
+
+    // Close the cURL session
+    curl_close($ch);
+
+    // Return the response
+    // Return the response and HTTP status code
+    return [
+        'body' => $response,
+        'status_code' => $httpCode,
+    ];
+}
+
+
+
+public function saveSingleToDatabase(array $data, $isCustomMessage)
 {
     try {
-
-        $firstName = $data['firstName'];
+        $firstName = $data['first_name']; // Ensure key matches your input
+        $lastName = $data['last_name'] ?? ''; // Default to empty if not provided
         $phoneNumber = $data['phone_number'];
         $accountNumber = "";
         $date = date('Y-m-d');
         $message = $isCustomMessage
         ? $this->formatCustomMessage($firstName, $accountNumber, $date)
-        : html_entity_decode($ordinaryMessage ?? "Dear customer, please fund your account for uninterrupted services.", ENT_QUOTES, 'UTF-8');
+        : html_entity_decode($data['message'] ?? "Dear customer, please fund your account for uninterrupted services.", ENT_QUOTES, 'UTF-8');
 
         $smsData = [
             'phone_number' => $phoneNumber,
-            'first_name' => $firstName,
-            'last_name' => $data['last_name'] ?? '', // Ensure last_name is included
+            'firstname' => $firstName,
+            'lastname' => $lastName, // Ensure last_name is included
             'message' => $message, // Save the formatted message
             'date' => $date, // You can store the date as well
             // Add any additional fields required by the Sms model
         ];
 
-        Log::info("Saving single SMS to database:", $data);
-        Sms::create($smsData); // Single insert
-        Log::info("Successfully saved SMS for " . $data['phone_number']);
+        Log::info("Attempting to save single SMS to database:", $smsData);
+        $smsRecord = Sms::create($smsData);
+
+        Log::info("Successfully saved SMS with ID {$smsRecord->id} for " . $smsData['phone_number']);
+        return $smsRecord->id;
+       // Log::info("Successfully saved SMS with ID {$insertedId} for " . $smsData['phone_number']);
+
+        //return $insertedId; // Return the ID to be used in sendSingleSms
+
+
     } catch (\Exception $e) {
         $this->failCount++;
         $this->errors[] = "Error saving single SMS to database: " . $e->getMessage();
     }
+
+
+
+
+
 }
+
+
+
+
+public function sendSingleSmsWithSave(array $data, bool $isCustomMessage)
+{
+    $data['date'] = date('Y-m-d');
+    Log::info("Testing what is coming from the data ", $data);
+
+    // Save to database and retrieve ID
+    $dbId = $this->saveSingleToDatabase($data, $isCustomMessage);
+
+    if (!$dbId) {
+        Log::error("Failed to save SMS to database for data: id is not found ", $data);
+        return [
+            'status' => false,
+            'error' => 'Failed to save SMS to database. Id not found',
+        ];
+    }
+
+    // Prepare SMS data with db_id
+    $data['db_id'] = $dbId;
+    $smsData = [
+        'text' => $data['message'],
+        'receiver' => $data['phone_number'],
+        'sender' => "UBA",
+        'request_id' => $data['db_id']
+    ];
+
+    Log::info("Sending SMS with data: ", $smsData);
+
+    // Send SMS and get response
+    $response = $this->sendSingleSms($smsData);
+
+    // Check the response status
+    if ($response['status_code'] >= 200 && $response['status_code'] < 300) {
+        Log::info("SMS sent successfully to {$data['phone_number']} with request_id {$data['db_id']}");
+        return [
+            'status' => true,
+            'message' => 'SMS sent successfully.',
+            'response' => $response['body'], // Log response body on success
+        ];
+    } else {
+        Log::error("Error sending SMS to {$data['phone_number']}: " . $response['body']);
+        return [
+            'status' => false,
+            'error' => 'Failed to send SMS.',
+            'response' => $response['body'], // Include the error response
+        ];
+    }
+}
+
+
 }
