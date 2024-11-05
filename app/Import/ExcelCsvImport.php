@@ -145,49 +145,131 @@ class ExcelCsvImport {
     }
 
     protected function sendBatchSms(array $chunk) {
+        $updateData = []; // Array to hold data for batch updating
+        $successCount = 0;
+        $failCount = 0;
+        $errors = [];
+    
         try {
             foreach ($chunk as $data) {
                 $response = $this->sendSmsToApi($data);
-
-                if ($response->successful()) {
-                    $this->successCount++;
+    
+                if ($response['status']) { // Check status instead of successful() method
+                    $successCount++;
+                    $updateData[] = [
+                        'id' => $data['db_id'],
+                        'status_code' => 'success',
+                        'api_message' => $response['body'],
+                        'updated_at' => now(),
+                    ];
                 } else {
-                    $this->failCount++;
-                    $this->errors[] = "Error sending SMS to {$data['phone_number']}: " . $response->body();
+                    $failCount++;
+                    $error_message = $response['error'] ?? "Error: HTTP code {$response['http_code']}";
+                    $errors[] = "Error sending SMS to {$data['phone_number']}: " . $error_message;
+    
+                    $updateData[] = [
+                        'id' => $data['db_id'],
+                        'status_code' => 'failed',
+                        'api_message' => $error_message,
+                        'updated_at' => now(),
+                    ];
                 }
             }
+    
+            // Perform a batch update in the database for this chunk
+            foreach ($updateData as $data) {
+                Sms::where('id', $data['id'])->update([
+                    'status_code' => $data['status_code'],
+                    'api_message' => $data['api_message'],
+                    'updated_at' => $data['updated_at'],
+                ]);
+            }
+    
+            $this->successCount += $successCount;
+            $this->failCount += $failCount;
+            $this->errors = array_merge($this->errors, $errors);
+    
         } catch (\Exception $e) {
             Log::error("Batch SMS sending failed: " . $e->getMessage());
             $this->failCount += count($chunk);
             $this->errors[] = "Batch sending error: " . $e->getMessage();
         }
     }
+    
+    
 
     protected function sendSmsToApi($data) {
-
-
-        $apiUrl = '';
-
-        return Http::post($apiUrl, [
+        Log::info("Starting SMS send process with data:", $data);
+    
+        $apiUrl = '' . http_build_query([
             'reciever' => $data['phone_number'],
             'text' => $data['message'],
             'sender' => 'UBA',
             'request_id' => $data['db_id'], // Using the database ID we added
         ]);
+    
+        Log::info("Generated API URL: $apiUrl");
+        $ch = curl_init($apiUrl);
+    
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+        ]);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+    
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    
+        // Log the HTTP status code and response for debugging
+        Log::info("HTTP Status Code: $httpCode");
+        Log::info("Raw API Response: $response");
+    
+        if (curl_errno($ch)) {
+            $error_msg = curl_error($ch);
+            Log::error("cURL Error for SMS request_id {$data['request_id']}: " . $error_msg);
+    
+            // Close cURL before returning the error response
+            curl_close($ch);
+            
+            // Return error response structure
+            return [
+                'status' => false,
+                'http_code' => $httpCode,
+                'error' => $error_msg,
+            ];
+        }
+    
+        // Close cURL before returning the success response
+        curl_close($ch);
+    
+        // Return successful response structure
+        return [
+            'status' => ($httpCode >= 200 && $httpCode < 300),
+            'http_code' => $httpCode,
+            'body' => $response,
+        ];
+       
     }
+    
 
 
 
 
     public function sendSingleSms(array $smsData)
 {
+     // Log the initial data before processing
+     Log::info("Starting SMS send process with data:", $smsData);
     $apiUrl = 'https://ubasms.approot.ng/php/bulksms.php?' .
         http_build_query([
             'receiver' => $smsData['receiver'],
             'text' => $smsData['text'],
             'sender' => $smsData['sender'],
             'request_id' => $smsData['request_id'],
-        ]);;
+        ]);
+
+          // Log the generated API URL
+    Log::info("Generated API URL: $apiUrl");
 
     // Prepare JSON data
     $jsonData =  http_build_query([
@@ -216,6 +298,11 @@ class ExcelCsvImport {
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE); // Get HTTP status code
 
+
+    // Log the HTTP status code and response for debugging
+    Log::info("HTTP Status Code: $httpCode");
+    Log::info("Raw API Response: $response");
+
     // Check for cURL errors
     if (curl_errno($ch)) {
         $error_msg = curl_error($ch);
@@ -228,6 +315,10 @@ class ExcelCsvImport {
      // Extract status code and message from the response
 $statusMessage = trim($response); // Clean the response
 $parts = explode(':', $statusMessage); // Split the response by ':'
+
+
+    // Log the response parsing attempt
+    Log::info("Parsed response parts:", $parts);
 
 // Initialize variables for status code and message
 $statusCode = null;
@@ -246,11 +337,21 @@ if (count($parts) === 3) {
     'updated_at' => now()
 ];
 
-Sms::where('id', $smsData['request_id'])->update($updateData);
+   // Attempt to update the SMS record and log the result
+   try {
+    Sms::where('id', $smsData['request_id'])->update($updateData);
+    Log::info("Database updated successfully for request_id {$smsData['request_id']}");
+} catch (\Exception $e) {
+    Log::error("Database update failed for request_id {$smsData['request_id']}: " . $e->getMessage());
+    return [
+        'status' => false,
+        'error' => "Database update error: " . $e->getMessage()
+    ];
+}
      
      Log::info("API Response for SMS request_id {$smsData['request_id']}:  the status code: {$statusCode} : message: {$message}" . print_r($parts) . "count parts " . count($parts) );
 
-     // confirm if its divided into two
+     
      
      
 
