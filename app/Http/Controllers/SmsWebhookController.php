@@ -9,60 +9,74 @@ use Illuminate\Support\Facades\Log;
 
 class SmsWebhookController extends Controller
 {
-    public function handleWebhook(Request $request)
-    {
-        // Log the incoming request
-        Log::info('Incoming SMS webhook', $request->all());
+     public function handleWebhook(Request $request)
+     {
 
-        $smsId = $request->input('smsID');
-        $type = $request->input('type');
-        $message = $request->input('message');
-        $phoneNumber = $request->input('phone');
-        $sender = $request->input('sender');
+           Log::info('Incoming SMS webhook', $request->all());
+        
+    //     // Log the incoming request
+    //     //Log::info('Incoming SMS webhook', $request->all());
 
-        // Validate the request
-        if ($type == 8 || $type == 16) {
-            return response()->json(['message' => 'Request ignored'], 200);
-        }
+       
+    //     $smsId = $request->input('smsID');
+    //     $type = $request->input('type');
+    //     $message = $request->input('message');
+    //     $phoneNumber = $request->input('phone');
+    //     $sender = $request->input('sender');
 
-        // Parse the message content
-        $parts = explode(' ', $message);
-        $status = $parts[0] ?? null;
-        preg_match('/err:(\d+)/', $message, $matches);
-        $errorCode = $matches[1] ?? null;
 
-        try {
-            // Fetch the message record from the database
-            $messageRecord = Sms::findOrFail($smsId);
+       
 
-            // Generate a random "done" timestamp
-            $createdAt = $messageRecord->created_at->getTimestamp();
-            $randomDoneTimestamp = rand($createdAt, $createdAt + 60);
-            $doneDate = date('Y-m-d H:i:s', $randomDoneTimestamp);
+    //     if($type){
+    //         // Validate the request
+    //         if ($type == 8 || $type == 16) {
+    //         return response()->json(['message' => 'Request ignored'], 200);
+    //         }
+    //     }
 
-            // Update the message record
-            $messageRecord->update([
-                'dlr_status' => $status,
-                'dlr_request' => $errorCode,
-                'dlr_results' => $smsId,
-                'network' => $sender,
-                'updated_at' => $doneDate,
-            ]);
+    //    Log::info("Hello i got here");
 
-            Log::info('SMS webhook processed successfully', [
-                'sms_id' => $smsId,
-                'status' => $status,
-                'error_code' => $errorCode,
-            ]);
+    //     // Parse the message content
+    //     $parts = explode(' ', $message);
+    //     $status = $parts[0] ?? null;
+    //     preg_match('/err:(\d+)/', $message, $matches);
+    //     $errorCode = $matches[1] ?? null;
 
-            return response()->json(['message' => 'SMS webhook processed'], 200);
-        } catch (\Exception $e) {
-            Log::error('Error processing SMS webhook', [
-                'error' => $e->getMessage(),
-                'sms_id' => $smsId,
-            ]);
+    //     try {
+    //         // Fetch the message record from the database
+    //         $messageRecord = Sms::findOrFail($smsId);
 
-            return response()->json(['message' => 'Error processing SMS webhook'], 500);
-        }
-    }
+    //         // Generate a random "done" timestamp
+    //         $createdAt = $messageRecord->created_at->getTimestamp();
+    //         $randomDoneTimestamp = rand($createdAt, $createdAt + 60);
+    //         $doneDate = date('Y-m-d H:i:s', $randomDoneTimestamp);
+
+    //         // Update the message record
+    //         $messageRecord->update([
+    //             'dlr_status' => $status,
+    //             'dlr_request' => $errorCode,
+    //             'dlr_results' => $smsId,
+    //             'network' => $sender,
+    //             'updated_at' => $doneDate,
+    //         ]);
+
+    //         // Log::info('SMS webhook processed successfully', [
+    //         //     'sms_id' => $smsId,
+    //         //     'status' => $status,
+    //         //     'error_code' => $errorCode,
+    //         // ]);
+
+    //         return response()->json(['message' => 'SMS webhook processed'], 200);
+    //     } catch (\Exception $e) {
+    //         // Log::error('Error processing SMS webhook', [
+    //         //     'error' => $e->getMessage(),
+    //         //     'sms_id' => $smsId,
+    //         // ]);
+
+    //         return response()->json(['message' => 'Error processing SMS webhook'], 500);
+    //     }
+     }
+
+
+    
 }

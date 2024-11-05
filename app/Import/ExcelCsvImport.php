@@ -145,113 +145,37 @@ class ExcelCsvImport {
     }
 
     protected function sendBatchSms(array $chunk) {
-        $updateData = []; // Array to hold data for batch updating
-        $successCount = 0;
-        $failCount = 0;
-        $errors = [];
-    
+        
         try {
             foreach ($chunk as $data) {
                 $response = $this->sendSmsToApi($data);
-    
-                if ($response['status']) { // Check status instead of successful() method
-                    $successCount++;
-                    $updateData[] = [
-                        'id' => $data['db_id'],
-                        'status_code' => 'success',
-                        'api_message' => $response['body'],
-                        'updated_at' => now(),
-                    ];
+
+                if ($response->successful()) {
+                    $this->successCount++;
                 } else {
-                    $failCount++;
-                    $error_message = $response['error'] ?? "Error: HTTP code {$response['http_code']}";
-                    $errors[] = "Error sending SMS to {$data['phone_number']}: " . $error_message;
-    
-                    $updateData[] = [
-                        'id' => $data['db_id'],
-                        'status_code' => 'failed',
-                        'api_message' => $error_message,
-                        'updated_at' => now(),
-                    ];
+                    $this->failCount++;
+                    $this->errors[] = "Error sending SMS to {$data['phone_number']}: " . $response->body();
                 }
             }
-    
-            // Perform a batch update in the database for this chunk
-            foreach ($updateData as $data) {
-                Sms::where('id', $data['id'])->update([
-                    'status_code' => $data['status_code'],
-                    'api_message' => $data['api_message'],
-                    'updated_at' => $data['updated_at'],
-                ]);
-            }
-    
-            $this->successCount += $successCount;
-            $this->failCount += $failCount;
-            $this->errors = array_merge($this->errors, $errors);
-    
         } catch (\Exception $e) {
             Log::error("Batch SMS sending failed: " . $e->getMessage());
             $this->failCount += count($chunk);
             $this->errors[] = "Batch sending error: " . $e->getMessage();
         }
     }
-    
-    
 
     protected function sendSmsToApi($data) {
-        Log::info("Starting SMS send process with data:", $data);
-    
-        $apiUrl = '' . http_build_query([
+
+
+        $apiUrl = '';
+
+        return Http::post($apiUrl, [
             'reciever' => $data['phone_number'],
             'text' => $data['message'],
             'sender' => 'UBA',
             'request_id' => $data['db_id'], // Using the database ID we added
         ]);
-    
-        Log::info("Generated API URL: $apiUrl");
-        $ch = curl_init($apiUrl);
-    
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Content-Type: application/json',
-        ]);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-    
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    
-        // Log the HTTP status code and response for debugging
-        Log::info("HTTP Status Code: $httpCode");
-        Log::info("Raw API Response: $response");
-    
-        if (curl_errno($ch)) {
-            $error_msg = curl_error($ch);
-            Log::error("cURL Error for SMS request_id {$data['request_id']}: " . $error_msg);
-    
-            // Close cURL before returning the error response
-            curl_close($ch);
-            
-            // Return error response structure
-            return [
-                'status' => false,
-                'http_code' => $httpCode,
-                'error' => $error_msg,
-            ];
-        }
-    
-        // Close cURL before returning the success response
-        curl_close($ch);
-    
-        // Return successful response structure
-        return [
-            'status' => ($httpCode >= 200 && $httpCode < 300),
-            'http_code' => $httpCode,
-            'body' => $response,
-        ];
-       
     }
-    
 
 
 
