@@ -1,3 +1,4 @@
+
 <?php
 namespace App\Import;
 
@@ -145,7 +146,7 @@ class ExcelCsvImport {
     }
 
     protected function sendBatchSms(array $chunk) {
-        
+
         try {
             foreach ($chunk as $data) {
                 $response = $this->sendSmsToApi($data);
@@ -272,12 +273,12 @@ if (count($parts) === 3) {
         'error' => "Database update error: " . $e->getMessage()
     ];
 }
-     
+
      Log::info("API Response for SMS request_id {$smsData['request_id']}:  the status code: {$statusCode} : message: {$message}" . print_r($parts) . "count parts " . count($parts) );
 
-     
-     
-     
+
+
+
 
     // Close the cURL session
     curl_close($ch);

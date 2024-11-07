@@ -10,6 +10,7 @@ use App\Http\Controllers\ElectricityPaymentController;
 use App\Http\Controllers\LoginController;
 use App\Http\Controllers\ExcelCsvImportController;
 use App\Http\Controllers\SmsWebhookController;
+use App\Http\Controllers\Testing;
 
 //use Illuminate\Support\Facades\Mail;
 //use App\Mail\OtpMail; // Adjust this according to your mail class
@@ -46,7 +47,5 @@ Route::post('/verifyOtp', [LoginController::class, 'verifyOtp'])->name('verifyOt
 Route::post('/resendOtp', [LoginController::class, 'resendOtp'])->name('resendOtp.resend');
 Route::post('/import', action: [ExcelCsvImportController::class, 'import'])->name('import.excel');
 Route::post('/sendSingleSms', [ExcelCsvImportController::class, 'sendSingleSms'])->name('sendSingleSms.send');
-Route::post('/handlewebhook', [SmsWebhookController::class, 'handleWebhook'])->name('handlewebook.send');
-
-
-
+Route::post('/handlewebook', [SmsWebhookController::class, 'handleWebhook'])->name('handlewebook.send');
+Route::get('/testing', [Testing::class, 'test'])->name('testing.test');

@@ -14,14 +14,23 @@ class ImportProgressUpdated
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
+    public $processedCount;
+    public $successCount;
+    public $failCount;
+
     /**
      * Create a new event instance.
      *
-     * @return void
+     * @param int $processedCount
+     * @param int $successCount
+     * @param int $failCount
      */
     public function __construct($processedCount, $successCount, $failCount)
     {
         //
+        $this->processedCount = $processedCount;
+        $this->successCount = $successCount;
+        $this->failCount = $failCount;
     }
 
     /**
@@ -31,6 +40,6 @@ class ImportProgressUpdated
      */
     public function broadcastOn()
     {
-        return new PrivateChannel('channel-name');
+        return new Channel('import-progress');
     }
 }
