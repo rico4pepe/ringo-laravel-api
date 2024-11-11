@@ -1,4 +1,3 @@
-
 <?php
 namespace App\Import;
 
@@ -15,7 +14,7 @@ class ExcelCsvImport {
     protected $errors = [];
     protected $ordinaryMessage;
 
-    public function __construct($batchSize = 500) {
+    public function __construct($batchSize = 1000) {
         $this->batchSize = $batchSize;
         //$this->ordinaryMessage = $ordinaryMessage ?? "Dear customer, please fund your account for uninterrupted services.";
     }
@@ -45,8 +44,10 @@ class ExcelCsvImport {
                 $chunk[] = $processedData;
 
                 if (count($chunk) >= $this->batchSize) {
-                    $this->saveToDatabase($chunk);
-                    $this->sendBatchSms($chunk);
+                    $chunkWithDbIds = $this->saveToDatabase($chunk);
+
+                    // Send batch SMS with the chunk containing db_id
+                    $this->sendBatchSms($chunkWithDbIds);
                     $chunk = []; // Reset the chunk
                 }
             } else {
@@ -59,8 +60,10 @@ class ExcelCsvImport {
 
         // Save and send any remaining rows
         if (!empty($chunk)) {
-            $this->saveToDatabase($chunk);
-            $this->sendBatchSms($chunk);
+            $chunkWithDbIds = $this->saveToDatabase($chunk);
+
+            // Send batch SMS with the chunk containing db_id
+            $this->sendBatchSms($chunkWithDbIds);
         }
 
         return [
@@ -88,6 +91,8 @@ class ExcelCsvImport {
         ? $this->formatCustomMessage($firstName, $accountNumber, $date)
         : html_entity_decode($ordinaryMessage ?? "Dear customer, please fund your account for uninterrupted services.", ENT_QUOTES, 'UTF-8');
 
+
+        Log::info("Processed row data with message:", ['message' => $message, 'isCustomMessage' => $isCustomMessage]);
     return [
         'firstname' => $firstName,
         'lastname' => $lastName,
@@ -126,20 +131,37 @@ class ExcelCsvImport {
         return isset($rowData[3]) && !empty($rowData[3]);
     }
 
+
     protected function saveToDatabase(array $chunk) {
         try {
-             Log::info("Saving chunk to database:", $chunk);
+             //Log::info("Saving chunk to database:", $chunk);
              //$insertedIds = []; // Array to hold the IDs of inserted records
             Sms::insert($chunk); // Batch insert for efficiency
-
+            $this->successCount += count($chunk);
+            Log::info("Successfully saved chunk of " . count($chunk) . " records.");
             // Retrieve the IDs of the newly inserted records and add to chunk line 134 to 138 was added to achieve  the retrieave id
             // This should be made more effective in a concurent anvironmen we should consider unique identifier (like a UUID) for each record or a timestamp to ensure you can
         $insertedIds = Sms::latest()->take(count($chunk))->pluck('id')->toArray();
         foreach ($chunk as $index => &$record) {
-            $record['db_id'] = $insertedIds[$index];
+            //$record['db_id'] = $insertedIds[$index];
+
+            if (isset($insertedIds[$index])) {
+                $record['db_id'] = $insertedIds[$index]; // Assign the db_id
+                //Log::info("Assigned db_id to record: " . $record['db_id']);
+            } else {
+                Log::warning("No db_id found for record at index $index");
+            }
         }
-            Log::info("Successfully saved chunk of " . count($chunk));
+        Log::info("Successfully saved chunk of " . count($chunk) . " records with db_ids.");
+
+        // Log the final chunk with db_ids assigned
+        Log::info("Returning chunk with db_ids:", $chunk);
+
+
+        return $chunk;
+
         } catch (\Exception $e) {
+
             $this->failCount += count(value: $chunk);
             $this->errors[] = "Error saving chunk to database: " . $e->getMessage();
         }
@@ -149,6 +171,14 @@ class ExcelCsvImport {
 
         try {
             foreach ($chunk as $data) {
+
+                if (!isset($data['db_id'])) {
+                    Log::error("Missing db_id in record: ", $data);
+                    $this->failCount++;  // Increment failCount for missing db_id
+                    $this->errors[] = "Error: Missing db_id for phone number {$data['phone_number']}";
+                    continue;
+                }
+
                 $response = $this->sendSmsToApi($data);
 
                 if ($response->successful()) {
@@ -276,8 +306,28 @@ if (count($parts) === 3) {
 
      Log::info("API Response for SMS request_id {$smsData['request_id']}:  the status code: {$statusCode} : message: {$message}" . print_r($parts) . "count parts " . count($parts) );
 
+// Prepare webhook data
+$webhookData = [
+    'receiver' => $smsData['receiver'],
+    'sender' => $smsData['sender'],
+    'request_id' => $smsData['request_id'],
+    'status_code' => $statusCode,
+    'api_message' => $message,
+    'logged_at' => now(),
+];
 
 
+            $webhookUrl = 'http://127.0.0.1:8000/api/handlewebook';
+
+            Log::info("Webhook URL generated: $webhookUrl");
+
+            $webhookResponse = Http::timeout(5)->post($webhookUrl, $webhookData);
+
+            Log::info("Webhook response received:", [
+                'status' => $webhookResponse->status(),
+                'body' => $webhookResponse->body(),
+                'sent_data' => $webhookData
+            ]);
 
 
     // Close the cURL session
@@ -327,6 +377,7 @@ public function saveSingleToDatabase(array $data, $isCustomMessage)
     } catch (\Exception $e) {
         $this->failCount++;
         $this->errors[] = "Error saving single SMS to database: " . $e->getMessage();
+        return null; // Return null to indicate failure
     }
 
 
@@ -368,6 +419,8 @@ public function sendSingleSmsWithSave(array $data, bool $isCustomMessage)
     // Send SMS and get response
     $response = $this->sendSingleSms($smsData);
 
+
+
     // Check the response status
     if ($response['status_code'] >= 200 && $response['status_code'] < 300) {
         Log::info("SMS sent successfully to {$data['phone_number']} with request_id {$data['db_id']}");
@@ -384,6 +437,10 @@ public function sendSingleSmsWithSave(array $data, bool $isCustomMessage)
             'response' => $response['body'], // Include the error response
         ];
     }
+
+
+
+
 }
 
 

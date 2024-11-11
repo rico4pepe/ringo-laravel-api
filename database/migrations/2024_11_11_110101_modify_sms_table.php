@@ -4,7 +4,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-class AddApimessageSmsTable extends Migration
+class ModifySmsTable extends Migration
 {
     /**
      * Run the migrations.
@@ -15,7 +15,15 @@ class AddApimessageSmsTable extends Migration
     {
         Schema::table('sms', function (Blueprint $table) {
             //
-            $table->string('api_message')->nullable();
+            $table->string('err_code')->nullable();  
+            $table->string('status')->nullable();  
+
+            $table->string('charset')->nullable();  
+            $table->string('kannel_id')->nullable();  
+
+            $table->string('sender')->nullable();  
+            $table->string('userref')->nullable(); 
+
         });
     }
 
@@ -28,7 +36,6 @@ class AddApimessageSmsTable extends Migration
     {
         Schema::table('sms', function (Blueprint $table) {
             //
-            
         });
     }
 }

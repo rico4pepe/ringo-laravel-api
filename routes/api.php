@@ -47,5 +47,8 @@ Route::post('/verifyOtp', [LoginController::class, 'verifyOtp'])->name('verifyOt
 Route::post('/resendOtp', [LoginController::class, 'resendOtp'])->name('resendOtp.resend');
 Route::post('/import', action: [ExcelCsvImportController::class, 'import'])->name('import.excel');
 Route::post('/sendSingleSms', [ExcelCsvImportController::class, 'sendSingleSms'])->name('sendSingleSms.send');
-Route::post('/handlewebook', [SmsWebhookController::class, 'handleWebhook'])->name('handlewebook.send');
+Route::get('/handlewebook', [SmsWebhookController::class, 'handleWebhook'])->name('handlewebook.send');
+
 Route::get('/testing', [Testing::class, 'test'])->name('testing.test');
+Route::get('/test', [SmsWebhookController::class, 'test'])->name('test.send');
+

@@ -12,12 +12,16 @@ class Sms extends Model
     protected $table = 'sms';
 
 
-    
+
     protected $fillable = [
         'firstname',
         'lastname',
         'phone_number',
         'message',
-        
+        'created_at',
+        'updated_at',
+        'status_code',
+        'api_message',
+
     ];
 }
