@@ -89,21 +89,10 @@ public function sendSingleSms(Request $request)
         'phone_number' => 'required|string',
         'first_name' => 'required|string',
         'last_name' => 'required|string',
-        //'account_number' => $request->has('account_number') ? 'nullable|string' : '', // Validate only if present
     ]);
-
-    if ($request->has('account_number')) {
-        $request->validate([
-            'account_number' => 'nullable|string',
-        ]);
-    }
 
      $isCustomMessage = filter_var($request->input('isCustomMessage'), FILTER_VALIDATE_BOOLEAN);
      $ordinaryMessage = trim($request->input('messageContent'));
-
-
-     // Added logic for account_number validation
-$account_number = $request->has('account_number') ? trim($request->input('account_number')) : null;
 
      //
      Log::info('Test the log info');
@@ -125,7 +114,6 @@ $account_number = $request->has('account_number') ? trim($request->input('accoun
             'first_name' => $request->input('first_name'),
             'last_name' => $request->input('last_name'),
             'message' => $ordinaryMessage,
-            'account_number' => $account_number ?? '',
             //'is_custom_message' => $request->input('is_custom_message'),
         ];
 

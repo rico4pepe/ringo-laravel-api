@@ -4,7 +4,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-class AddAccountsToSmsTable extends Migration
+class AddApiMessageToSmsTable extends Migration
 {
     /**
      * Run the migrations.
@@ -15,7 +15,7 @@ class AddAccountsToSmsTable extends Migration
     {
         Schema::table('sms', function (Blueprint $table) {
             //
-            
+            $table->string('api_message')->nullable()->after('status_code'); // Add the column after 'status'
         });
     }
 
@@ -28,7 +28,6 @@ class AddAccountsToSmsTable extends Migration
     {
         Schema::table('sms', function (Blueprint $table) {
             //
-            $table->string('account_number')->nullable();
         });
     }
 }

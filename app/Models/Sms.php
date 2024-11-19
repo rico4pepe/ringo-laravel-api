@@ -22,6 +22,7 @@ class Sms extends Model
         'updated_at',
         'status_code',
         'api_message',
+        'account_number',
 
     ];
 }
