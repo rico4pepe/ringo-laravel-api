@@ -182,8 +182,8 @@ class ExcelCsvImport {
 
 
               DB::beginTransaction();
-            
-          
+
+
 
              //Log::info("Saving chunk to database:", $chunk);
              $insertedIds = []; // Array to hold the IDs of inserted records
@@ -197,7 +197,7 @@ class ExcelCsvImport {
           foreach ($chunk as $index => &$record) {
             if (isset($insertedIds[$index])) {
                 $record['db_id'] = $insertedIds[$index]; // Assign the db_id
-                $this->successCount++; 
+                $this->successCount++;
             } else {
                 Log::warning("No db_id found for record at index $index");
                 $this->failCount++; // Update failCount correctly
@@ -414,7 +414,7 @@ $webhookData = [
                 $response = Http::timeout(10)
                     ->retry(3, 100)
                     ->post($webhookUrl, $webhookData);
-                
+
                 if ($response->successful()) {
                     Log::info("Webhook delivered successfully", [
                         'request_id' => $webhookData['request_id']
@@ -438,13 +438,13 @@ $webhookData = [
     // Close the cURL session
     curl_close($ch);
 
-    
+
     // Send GET request to the second endpoint
      $secondaryApiUrl = 'https://messaging.approot.ng//api3.php?' .
      http_build_query([
-         'phone' => $smsData['receiver'],
-         'message' => $smsData['text'],
-         'sender_id' => $smsData['sender']
+         'phone' => $data['phone_number'],
+         'message' => $data['message'],
+         'sender_id' => 'UBA'
      ]);
 
      Log::info("Generated Secondary API URL: $secondaryApiUrl");
@@ -453,7 +453,7 @@ $webhookData = [
     curl_setopt($ch2, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch2, CURLOPT_SSL_VERIFYPEER, false);
     curl_setopt($ch2, CURLOPT_SSL_VERIFYHOST, false);
-    
+
     $secondaryResponse = curl_exec($ch2);
     $secondaryHttpCode = curl_getinfo($ch2, CURLINFO_HTTP_CODE);
 
@@ -470,9 +470,7 @@ $webhookData = [
     return [
         'body' => $response,
         'status_code' => $httpCode,
-        'secondary_response' => $secondaryResponse,
-        'secondary_status_code' => $secondaryHttpCode,
-        'status' => $httpCode >= 200 && $httpCode < 300 && $secondaryHttpCode >= 200 && $secondaryHttpCode < 300, 
+        'status' => $httpCode >= 200 && $httpCode < 300,
     ];
     }
 
@@ -480,144 +478,125 @@ $webhookData = [
 
 
     public function sendSingleSms(array $smsData)
-{
-     // Log the initial data before processing
-     Log::info("Starting SMS send process with data:", $smsData);
+    {
+        // Log the initial data before processing
+        Log::info("Starting SMS send process with data:", $smsData);
 
-     if (empty($smsData['text'])) { 
-        $savedRecord = Sms::find($smsData['request_id']);
-        
-        if (!$savedRecord) {
-            Log::error("Could not retrieve SMS record after save for ID {$smsData['request_id']}");
+        if (empty($smsData['text'])) {
+            $savedRecord = Sms::find($smsData['request_id']);
+
+            if (!$savedRecord) {
+                Log::error("Could not retrieve SMS record after save for ID {$smsData['request_id']}");
+                return [
+                    'status' => false,
+                    'error' => 'Failed to retrieve saved SMS record.',
+                ];
+            }
+
+            // Assign variables from saved record
+            $accountNumber = $savedRecord->account_number;
+            $date = $savedRecord->date;
+            $accountNumber = $this->maskAccountNumber($accountNumber);
+
+            // Ensure formatCustomMessage is a valid method
+            $smsData['text'] = $this->formatCustomMessage($smsData['receiver'], $accountNumber, $date);
+        }
+
+        $apiUrl = 'https://ubasms.approot.ng/php/bulksms.php?' .
+            http_build_query([
+                'receiver' => $smsData['receiver'],
+                'text' => $smsData['text'],
+                'sender' => $smsData['sender'],
+                'request_id' => $smsData['request_id'],
+            ]);
+
+        // Log the generated API URL
+        Log::info("Generated API URL: $apiUrl");
+
+        // Initialize cURL
+        $ch = curl_init($apiUrl);
+
+        // Set cURL options
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+        ]);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+
+        // Execute cURL request
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+
+        // Log the HTTP status code and response for debugging
+        Log::info("HTTP Status Code: $httpCode");
+        Log::info("Raw API Response: $response");
+
+        // Check for cURL errors
+        if (curl_errno($ch)) {
+            $error_msg = curl_error($ch);
+            Log::error("cURL Error for SMS request_id {$smsData['request_id']}: " . $error_msg);
+        } else {
+            // Log the response
+            Log::info("API Response for SMS request_id {$smsData['request_id']}: " . $response);
+        }
+
+        // Extract status code and message from the response
+        $statusMessage = trim($response);
+        $parts = explode(':', $statusMessage);
+
+        // Log the response parsing attempt
+        Log::info("Parsed response parts:", $parts);
+
+        // Initialize variables for status code and message
+        $statusCode = null;
+        $message = null;
+
+        // Check if parts have at least two elements
+        if (count($parts) === 3) {
+            $statusCode = trim($parts[1]); // Get the status code (first part)
+            $message = trim($parts[2]);    // Get the message (second part)
+        }
+
+        // Store response in database
+        $updateData = [
+            'status_code' => $statusCode,
+            'api_message' => $message,
+            'updated_at' => now(),
+        ];
+
+        // Attempt to update the SMS record and log the result
+        try {
+            Sms::where('id', $smsData['request_id'])->update($updateData);
+            Log::info("Database updated successfully for request_id {$smsData['request_id']}");
+        } catch (\Exception $e) {
+            Log::error("Database update failed for request_id {$smsData['request_id']}: " . $e->getMessage());
             return [
                 'status' => false,
-                'error' => 'Failed to retrieve saved SMS record.',
+                'error' => "Database update error: " . $e->getMessage(),
             ];
         }
-    
-        // Assign variables from saved record
-        $accountNumber = $savedRecord->account_number;
-        $date = $savedRecord->date;
-        $accountNumber = $this->maskAccountNumber($accountNumber);
-        
-        // Ensure formatCustomMessage is a valid method
-        $smsData['text'] = $this->formatCustomMessage($smsData['receiver'], $accountNumber, $date);
-    }
-    $apiUrl = 'https://ubasms.approot.ng/php/bulksms.php?' .
-        http_build_query([
+
+        Log::info("API Response for SMS request_id {$smsData['request_id']}: the status code: {$statusCode} : message: {$message}");
+
+        // Prepare webhook data
+        $webhookData = [
             'receiver' => $smsData['receiver'],
-            'text' => $smsData['text'],
             'sender' => $smsData['sender'],
             'request_id' => $smsData['request_id'],
-        ]);
+        ];
 
-          // Log the generated API URL
-    Log::info("Generated API URL: $apiUrl");
+        $webhookUrl = 'http://127.0.0.1:8000/api/handlewebook';
 
-    // // Prepare JSON data
-    // $jsonData =  http_build_query([
-    //     'receiver' => $smsData['receiver'],
-    //     'text' => $smsData['text'],
-    //     'sender' => $smsData['sender'],
-    //     'request_id' => $smsData['request_id'],
-    // ]);
+        Log::info("Webhook URL generated: $webhookUrl");
 
-    // Initialize cURL
-    $ch = curl_init($apiUrl);
-
-    // Set cURL options
-    // curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
-    // curl_setopt($ch, CURLOPT_POSTFIELDS, $jsonData);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        'Content-Type: application/json',
-    ]);
-
-
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-
-    // Execute cURL request
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE); // Get HTTP status code
-
-
-    // Log the HTTP status code and response for debugging
-    Log::info("HTTP Status Code: $httpCode");
-    Log::info("Raw API Response: $response");
-
-    // Check for cURL errors
-    if (curl_errno($ch)) {
-        $error_msg = curl_error($ch);
-        Log::error("cURL Error for SMS request_id {$smsData['request_id']}: " . $error_msg);
-    } else {
-        // Log the response
-        Log::info("API Response for SMS request_id {$smsData['request_id']}: " . $response);
-    }
-
-     // Extract status code and message from the response
-$statusMessage = trim($response); // Clean the response
-$parts = explode(':', $statusMessage); // Split the response by ':'
-
-
-    // Log the response parsing attempt
-    Log::info("Parsed response parts:", $parts);
-
-// Initialize variables for status code and message
-$statusCode = null;
-$message = null;
-
-// Check if parts have at least two elements
-if (count($parts) === 3) {
-    $statusCode = trim($parts[1]); // Get the status code (first part)
-    $message = trim($parts[2]); // Get the message (second part)
-}
-
-  // Store response in database
-  $updateData = [
-    'status_code' => $statusCode,
-    'api_message' => $message,
-    'updated_at' => now()
-];
-
-   // Attempt to update the SMS record and log the result
-   try {
-    Sms::where('id', $smsData['request_id'])->update($updateData);
-    Log::info("Database updated successfully for request_id {$smsData['request_id']}");
-} catch (\Exception $e) {
-    Log::error("Database update failed for request_id {$smsData['request_id']}: " . $e->getMessage());
-    return [
-        'status' => false,
-        'error' => "Database update error: " . $e->getMessage()
-    ];
-}
-
-     Log::info("API Response for SMS request_id {$smsData['request_id']}:  the status code: {$statusCode} : message: {$message}" . print_r($parts) . "count parts " . count($parts) );
-
-// Prepare webhook data
-$webhookData = [
-    'receiver' => $smsData['receiver'],
-    'sender' => $smsData['sender'],
-    'request_id' => $smsData['request_id'],
-    //'status_code' => $statusCode,
-   // 'api_message' => $message,
-   // 'logged_at' => now(),
-];
-
-
-            $webhookUrl = 'http://127.0.0.1:8000/api/handlewebook';
-
-            Log::info("Webhook URL generated: $webhookUrl");
-
-
-
-              // Dispatch the webhook request asynchronously
+        // Dispatch the webhook request asynchronously
         dispatch(function () use ($webhookUrl, $webhookData) {
             try {
                 $response = Http::timeout(10)
                     ->retry(3, 100)
                     ->post($webhookUrl, $webhookData);
-                
+
                 if ($response->successful()) {
                     Log::info("Webhook delivered successfully", [
                         'request_id' => $webhookData['request_id']
@@ -636,54 +615,17 @@ $webhookData = [
                 ]);
             }
         })->afterResponse();
-            
-            
 
-           // $webhookResponse = Http::timeout(5)->post($webhookUrl, $webhookData);
+        // Close the cURL session
+        curl_close($ch);
 
-
-            
-
-    // Close the cURL session
-    curl_close($ch);
-
-
-     // Send GET request to the second endpoint
-     $secondaryApiUrl = 'https://messaging.approot.ng//api3.php?' .
-     http_build_query([
-         'phone' => $smsData['receiver'],
-         'message' => urlencode($smsData['text']),
-         'sender_id' => $smsData['sender']
-     ]);
-
-     Log::info("Generated Secondary API URL: $secondaryApiUrl");
-
-    $ch2 = curl_init($secondaryApiUrl);
-    curl_setopt($ch2, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch2, CURLOPT_SSL_VERIFYPEER, false);
-    curl_setopt($ch2, CURLOPT_SSL_VERIFYHOST, false);
-    
-    $secondaryResponse = curl_exec($ch2);
-    $secondaryHttpCode = curl_getinfo($ch2, CURLINFO_HTTP_CODE);
-
-    Log::info("Secondary HTTP Status Code: $secondaryHttpCode");
-    Log::info("Secondary API Response: $secondaryResponse");
-
-    if (curl_errno($ch2)) {
-        Log::error("cURL Error for secondary request: " . curl_error($ch2));
+        // Return the response
+        return [
+            'body' => $response,
+            'status_code' => $httpCode,
+            'status' => $httpCode >= 200 && $httpCode < 300,
+        ];
     }
-    curl_close($ch2);
-
-    // Return the response
-    // Return the response and HTTP status code
-    return [
-        'body' => $response,
-        'status_code' => $httpCode,
-        'secondary_response' => $secondaryResponse,
-        'secondary_status_code' => $secondaryHttpCode,
-        'status' => $httpCode >= 200 && $httpCode < 300 && $secondaryHttpCode >= 200 && $secondaryHttpCode < 300, 
-    ];
-}
 
 
 
@@ -693,14 +635,14 @@ public function saveSingleToDatabase(array $data, $isCustomMessage)
         $firstName = $data['first_name']; // Ensure key matches your input
         $lastName = $data['last_name'] ?? ''; // Default to empty if not provided
         $phoneNumber = $data['phone_number'];
-        $accountNumber = $data['account_number'];  
+        $accountNumber = $data['account_number'];
         $date = date('Y-m-d');
         $message = $isCustomMessage
         ? $this->formatCustomMessage($firstName, $accountNumber, $date)
         : html_entity_decode($data['message'] ?? "Dear customer, please fund your account for uninterrupted services.", ENT_QUOTES, 'UTF-8');
 
 
-        
+
         $smsData = [
             'phone_number' => $phoneNumber,
             'firstname' => $firstName,
