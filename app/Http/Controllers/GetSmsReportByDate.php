@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Sms;
+use Illuminate\Support\Facades\Log;
 
 class GetSmsReportByDate extends Controller
 {
@@ -30,9 +31,16 @@ class GetSmsReportByDate extends Controller
     $filterDate = $request->query('filter_date');
 
     // Query the SMS table for records matching the given date
-    $smsRecords = Sms::whereDate('created_at', $filterDate)
+    $smsRecords = Sms::whereDate('date', $filterDate)
         ->select('status', 'phone_number', 'firstname', 'lastname', 'err_code', 'status_code', 'api_message')
         ->get();
+
+                    // Log the query results
+                    Log::info('SMS records retrieved', [
+                        'count' => $smsRecords->count(),
+                        'date' => $filterDate
+                    ]);
+
 
     // Return the results as JSON
     return response()->json([

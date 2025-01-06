@@ -19,6 +19,7 @@ class SmsWebhookController extends Controller
     {
         Log::info("Raw webhook request received:", [
             'all' => $request->all(),
+            'method' => $request->method(),
             'content' => $request->getContent()
         ]);
 

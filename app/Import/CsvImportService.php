@@ -153,7 +153,7 @@ class CsvImportService
     }
 
     protected function clearMemory()
-    { 
+    {
         // Clear unused variables and free up memory
         gc_collect_cycles(); // Explicit garbage collection
     }

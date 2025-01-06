@@ -10,8 +10,10 @@ use App\Http\Controllers\ElectricityPaymentController;
 use App\Http\Controllers\LoginController;
 use App\Http\Controllers\ExcelCsvImportController;
 use App\Http\Controllers\SmsWebhookController;
-use App\Http\Controllers\Testing;
+//use App\Http\Controllers\Testing;
 use App\Http\Controllers\GetSmsReportByDate;
+use App\Http\Controllers\DynamicSenderId;
+use Illuminate\Support\Facades\Log;
 
 //use Illuminate\Support\Facades\Mail;
 //use App\Mail\OtpMail; // Adjust this according to your mail class
@@ -48,9 +50,37 @@ Route::post('/verifyOtp', [LoginController::class, 'verifyOtp'])->name('verifyOt
 Route::post('/resendOtp', [LoginController::class, 'resendOtp'])->name('resendOtp.resend');
 Route::post('/import', action: [ExcelCsvImportController::class, 'import'])->name('import.excel');
 Route::post('/sendSingleSms', [ExcelCsvImportController::class, 'sendSingleSms'])->name('sendSingleSms.send');
-Route::post('/handlewebook', [SmsWebhookController::class, 'handleWebhook'])->name('handlewebook.send');
+Route::get('/handlewebook', [SmsWebhookController::class, 'handleWebhook'])->name('handlewebook.send');
+// In routes/api.php - Add this temporary debugging route
+// Route::any('/handlewebook', function(Request $request) {
+//     Log::info('Webhook Endpoint Debug', [
+//         'method' => $request->method(),
+//         'url' => $request->fullUrl(),
+//         'headers' => $request->headers->all(),
+//         'ip' => $request->ip(),
+//         'user_agent' => $request->userAgent(),
+//         'request_data' => $request->all()
+//     ]);
+
+//     if ($request->method() !== 'POST') {
+//         Log::warning('Invalid method used for webhook', [
+//             'method' => $request->method(),
+//             'url' => $request->fullUrl()
+//         ]);
+//         return response()->json([
+//             'error' => 'Method not allowed',
+//             'allowed_methods' => ['POST']
+//         ], 405);
+//     }
+
+//     return app(SmsWebhookController::class)->handleWebhook($request);
+// })->name('handlewebook.send');
+
+
 
 Route::get('/smsFilterByDate', [GetSmsReportByDate::class, 'getSmsByDate'])->name('smsFilter.send');
+Route::post('/dynamicSenderId', [DynamicSenderId::class, 'sendToDynamicSenderApi'])->name('sendToDynamic.send');
+
 
 
 

@@ -12,7 +12,7 @@ class DynamicSenderId extends Controller
      * @param Request $request
      * @return \Illuminate\Http\JsonResponse
      */
-    public function sendToSecondaryApi(Request $request)
+    public function sendToDynamicSenderApi(Request $request)
     {
         // Validate the incoming request
         $validatedData = $request->validate([

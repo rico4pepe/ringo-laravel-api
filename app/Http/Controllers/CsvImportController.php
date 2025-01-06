@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Import\CsvImportService;
 use App\Models\CsvImportLog; // target model
-use App\Models\User; 
+use App\Models\User;
 use Illuminate\Support\Facades\Validator;
 
 
@@ -14,8 +14,8 @@ class CsvImportController extends Controller
 {
     //
     public function upload(Request $request)
-    {  
-          
+    {
+
 
         // Validate the file upload request
         $validator = Validator::make($request->all(), [
@@ -53,7 +53,7 @@ class CsvImportController extends Controller
 
             // Call the import service and pass the file and API URL
             $importService = new CsvImportService(CsvImportLog::class, $apiUrl); // Pass the target model here (e.g., User::class)
-            
+
             // Mark as processing before calling the service
             $csvImportLog->status = CsvImportLog::STATUS_PROCESSING;
             $csvImportLog->save(); // Update status to "processing"
