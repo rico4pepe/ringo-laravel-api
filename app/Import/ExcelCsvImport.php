@@ -395,7 +395,7 @@ if (count($parts) === 3) {
 // ];
 
 
-$webhookUrl = 'https://5b7c-169-255-124-242.ngrok-free.app/api/handlewebook?' . 
+$webhookUrl = 'https://5b7c-169-255-124-242.ngrok-free.app/api/handlewebook?' .
 http_build_query([
     'receiver' => $data['phone_number'],  // Also fixed 'reciever' typo
     'sender' => 'UBA',
@@ -444,7 +444,7 @@ http_build_query([
     curl_close($ch);
 
 
-    
+
     // Return the response
     // Return the response and HTTP status code
     return [
@@ -460,10 +460,10 @@ http_build_query([
     {
         // Log the initial data before processing
         Log::info("Starting SMS send process with data:", $smsData);
-    
+
         if (empty($smsData['text'])) {
             $savedRecord = Sms::find($smsData['request_id']);
-    
+
             if (!$savedRecord) {
                 Log::error("Could not retrieve SMS record after save for ID {$smsData['request_id']}");
                 return [
@@ -471,16 +471,16 @@ http_build_query([
                     'error' => 'Failed to retrieve saved SMS record.',
                 ];
             }
-    
+
             // Assign variables from saved record
             $accountNumber = $savedRecord->account_number;
             $date = $savedRecord->date;
             $accountNumber = $this->maskAccountNumber($accountNumber);
-    
+
             // Ensure formatCustomMessage is a valid method
             $smsData['text'] = $this->formatCustomMessage($smsData['receiver'], $accountNumber, $date);
         }
-    
+
         $apiUrl = 'https://ubasms.approot.ng/php/bulksms.php?' .
             http_build_query([
                 'receiver' => $smsData['receiver'],
@@ -488,13 +488,13 @@ http_build_query([
                 'sender' => $smsData['sender'],
                 'request_id' => $smsData['request_id'],
             ]);
-    
+
         // Log the generated API URL
         Log::info("Generated API URL: $apiUrl");
-    
+
         // Initialize cURL
         $ch = curl_init($apiUrl);
-    
+
         // Set cURL options
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
@@ -502,15 +502,15 @@ http_build_query([
         ]);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
         curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-    
+
         // Execute cURL request
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    
+
         // Log the HTTP status code and response for debugging
         Log::info("HTTP Status Code: $httpCode");
         Log::info("Raw API Response: $response");
-    
+
         // Check for cURL errors
         if (curl_errno($ch)) {
             $error_msg = curl_error($ch);
@@ -519,31 +519,31 @@ http_build_query([
             // Log the response
             Log::info("API Response for SMS request_id {$smsData['request_id']}: " . $response);
         }
-    
+
         // Extract status code and message from the response
         $statusMessage = trim($response);
         $parts = explode(':', $statusMessage);
-    
+
         // Log the response parsing attempt
         Log::info("Parsed response parts:", $parts);
-    
+
         // Initialize variables for status code and message
         $statusCode = null;
         $message = null;
-    
+
         // Check if parts have at least two elements
         if (count($parts) === 3) {
             $statusCode = trim($parts[1]); // Get the status code (first part)
             $message = trim($parts[2]);    // Get the message (second part)
         }
-    
+
         // Store response in database
         $updateData = [
             'status_code' => $statusCode,
             'api_message' => $message,
             'updated_at' => now(),
         ];
-    
+
         // Attempt to update the SMS record and log the result
         try {
             Sms::where('id', $smsData['request_id'])->update($updateData);
@@ -555,26 +555,26 @@ http_build_query([
                 'error' => "Database update error: " . $e->getMessage(),
             ];
         }
-    
+
         Log::info("API Response for SMS request_id {$smsData['request_id']}: the status code: {$statusCode} : message: {$message}");
-    
+
         // Prepare webhook data as query parameters
-        $webhookUrl = 'https://5b7c-169-255-124-242.ngrok-free.app/api/handlewebook?' . 
+        $webhookUrl = 'https://5b7c-169-255-124-242.ngrok-free.app/api/handlewebook?' .
             http_build_query([
                 'receiver' => $smsData['receiver'],
                 'sender' => $smsData['sender'],
                 'request_id' => $smsData['request_id'],
             ]);
-    
+
         Log::info("Webhook URL generated: $webhookUrl");
-    
+
         // Dispatch the webhook request asynchronously
         dispatch(function () use ($webhookUrl) {
             try {
                 $response = Http::timeout(10)
                     ->retry(3, 100)
                     ->get($webhookUrl); // Changed from post() to get()
-    
+
                 if ($response->successful()) {
                     Log::info("Webhook delivered successfully", [
                         'request_id' => request('request_id')
@@ -593,10 +593,10 @@ http_build_query([
                 ]);
             }
         })->afterResponse();
-    
+
         // Close the cURL session
         curl_close($ch);
-    
+
         // Return the response
         return [
             'body' => $response,
