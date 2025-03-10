@@ -2,6 +2,8 @@
 
 use Illuminate\Support\Facades\Route;
 use BeyondCode\LaravelWebSockets\Facades\WebSocketsRouter;
+use App\Events\ImportProgressUpdated;
+
 
 /*
 |--------------------------------------------------------------------------
@@ -18,5 +20,11 @@ Route::get('/', function () {
     return view('welcome');
 });
 
+
+Route::get('/test-websocket', function () {
+    event(new ImportProgressUpdated(5, 3, 2)); // Simulating progress update
+
+    return response()->json(['message' => 'Event fired']);
+});
 
 WebSocketsRouter::webSocket('/ws', \BeyondCode\LaravelWebSockets\WebSockets\WebSocketHandler::class);

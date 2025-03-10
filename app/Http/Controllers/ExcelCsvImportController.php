@@ -8,6 +8,8 @@ use App\Import\ExcelCsvImport;
 use App\Models\ScheduledCampaign;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Http\Exceptions\HttpResponseException;
 
 class ExcelCsvImportController extends Controller
 {
@@ -20,16 +22,35 @@ class ExcelCsvImportController extends Controller
 
     public function import(Request $request)
     {
-        $request->validate([
-            'file' => 'required|file|mimes:csv,xlsx',
-           // 'ordinaryMessage' => 'required_if:isCustomMessage,false|string',
-            'campaignTitle' => 'required_if:isScheduled,true|string',
-            'scheduleDate' => 'required_if:isScheduled,true|date',
-            'scheduleTime' => 'required_if:isScheduled,true|date_format:H:i'
-        ]);
 
 
 
+
+
+        // Validate the request
+            // dd($isCustomMessage, $ordinaryMessage);
+            //Log::info('I am here');
+
+            $validator = Validator::make($request->all(), [
+                'file' => 'required|file|mimes:csv,xlsx. xls',
+                'campaignTitle' => 'required_if:isScheduled,true|string',
+                'scheduleDate' => 'required_if:isScheduled,true|date',
+                'scheduleTime' => 'required_if:isScheduled,true|date_format:H:i'
+            ]);
+
+
+
+        if ($validator->fails()) {
+            Log::error('File validation failed', [
+                'errors' => $validator->errors()->all(),
+                'file_name' => $request->file('file') ? $request->file('file')->getClientOriginalName() : 'No file uploaded'
+            ]);
+
+            throw new HttpResponseException(response()->json([
+                'error' => 'Invalid file type. Only CSV and XLSX files are allowed.',
+                'details' => $validator->errors()
+            ], 422));
+        }
 
         $isCustomMessage = filter_var($request->input('isCustomMessage'), FILTER_VALIDATE_BOOLEAN);
         $ordinaryMessage = trim($request->input('messageContent'));

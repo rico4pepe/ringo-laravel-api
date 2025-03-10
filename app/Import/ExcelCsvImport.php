@@ -20,19 +20,25 @@ class ExcelCsvImport {
         "id", "firstname", "lastname", "phone_number", "message", "date", "created_at", "updated_at"
     ];
 
-    public function __construct($batchSize = 1000) {
+    public function __construct($batchSize = 50) {
         $this->batchSize = $batchSize;
         //$this->ordinaryMessage = $ordinaryMessage ?? "Dear customer, please fund your account for uninterrupted services.";
     }
+
 
     public function importFile($filePath, $isCustomMessage, $ordinaryMessage = null)
 {
     try {
 
+
          // Check file extension and MIME type
+
+         Log::info('File path', $filePath);
          $fileInfo = pathinfo($filePath);
          $fileExtension = strtolower($fileInfo['extension']);
          $allowedExtensions = ['csv', 'xls', 'xlsx'];
+
+
 
            // Validate file extension
         if (!in_array($fileExtension, $allowedExtensions)) {
@@ -126,7 +132,7 @@ class ExcelCsvImport {
     $firstName = $rowData[1] ?? 'Customer'; // First name
     $lastName = $rowData[2] ?? ''; // Last name
     $phoneNumber = $rowData[3] ?? ''; // Phone number
-    $dateString = $rowData[5] ?? now()->toDateString(); // Date is at index 5
+    $dateString = $rowData[5] ?? Carbon::now()->toDateString(); // Using Carbon::now() where Date is at index 5
     $date = $this->parseDate($dateString);
     $accountNumber = $this->maskAccountNumber($rowData[7] ?? ''); // Assuming account number is in the last column
 
