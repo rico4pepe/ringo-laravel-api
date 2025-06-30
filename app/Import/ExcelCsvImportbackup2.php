@@ -285,111 +285,165 @@ class ExcelCsvImport {
 }
 
 
-protected function sendSmsToApi($data)
-{
-    Log::info("Preparing to send SMS via API:", $data);
+    protected function sendSmsToApi($data) {
 
-    $apiUrl = 'https://ubasms.approot.ng/php/bulksms.php?' . http_build_query([
-        'receiver' => $data['receiver'],
-        'text' => $data['text'],
-        'sender' => $data['sender'],
-        'request_id' => $data['request_id'],
-    ]);
 
-    Log::info("Generated API URL: $apiUrl");
+                            
 
-    $ch = curl_init($apiUrl);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
 
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                                Log::info("Starting SMS send process with data:", $data);
+                            $apiUrl = 'https://ubasms.approot.ng/php/bulksms.php?' .
+                                http_build_query([
+                                    'receiver' => $data['phone_number'],
+                                    'text' => $data['message'],
+                                    'sender' => 'UBA',
+                                    'request_id' => $data['db_id'], // Using the database ID we added
+                                ]);
 
-    if (curl_errno($ch)) {
-        $errorMsg = curl_error($ch);
-        curl_close($ch);
+                                // Log the generated API URL
+                            Log::info("Generated API URL: $apiUrl");
 
-        Log::error("cURL error on SMS API call:", [
-            'error' => $errorMsg,
-            'request_id' => $data['request_id']
-        ]);
+                        
+                            $ch = curl_init($apiUrl);
 
-        return [
-            'status' => false,
-            'error' => "Connection error: $errorMsg",
-            'body' => null,
-        ];
+                            // Set cURL options
+                            // curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
+                            // curl_setopt($ch, CURLOPT_POSTFIELDS, $jsonData);
+                            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                                'Content-Type: application/json',
+                            ]);
+
+
+                            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+                            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+
+                            // Execute cURL request
+                            $response = curl_exec($ch);
+                            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE); // Get HTTP status code
+
+
+                            // Log the HTTP status code and response for debugging
+                            Log::info("HTTP Status Code: $httpCode");
+                            Log::info("Raw API Response: $response");
+
+                            // Check for cURL errors
+                            if (curl_errno($ch)) {
+                                $error_msg = curl_error($ch);
+                                Log::error("cURL Error for SMS request_id {$data['db_id']}: " . $error_msg);
+                            } else {
+                                // Log the response
+                                Log::info("API Response for SMS request_id {$data['db_id']}: " . $response);
+                            }
+
+                            // Extract status code and message from the response
+                        $statusMessage = trim($response); // Clean the response
+                        $parts = explode(':', $statusMessage); // Split the response by ':'
+
+
+                            // Log the response parsing attempt
+                            Log::info("Parsed response parts:", $parts);
+
+                        // Initialize variables for status code and message
+                        $statusCode = null;
+                        $message = null;
+
+                        // Check if parts have at least two elements
+                        if (count($parts) === 3) {
+                            $statusCode = trim($parts[1]); // Get the status code (first part)
+                            $message = trim($parts[2]); // Get the message (second part)
+                        }
+
+                        // Store response in database
+                        $updateData = [
+                            'status_code' => $statusCode,
+                            'api_message' => $message,
+                            'updated_at' => now()
+                        ];
+
+                        // Attempt to update the SMS record and log the result
+                        try {
+                            Sms::where('id', $data['db_id'])->update($updateData);
+                            Log::info("Database updated successfully for request_id {$data['db_id']}");
+                        } catch (\Exception $e) {
+                            Log::error("Database update failed for request_id {$data['db_id']}: " . $e->getMessage());
+                            return [
+                                'status' => false,
+                                'error' => "Database update error: " . $e->getMessage()
+                            ];
+                        }
+
+                            Log::info("API Response for SMS request_id {$data['db_id']}:  the status code: {$statusCode} : message: {$message}" . print_r($parts) . "count parts " . count($parts) );
+
+                        // // Prepare webhook data
+                        // $webhookData = [
+                        //     'reciever' => $data['phone_number'],
+                        //     'sender' => 'UBA',
+                        //     'request_id' => $data['db_id'], // Using the database ID we added
+                        //    // 'status_code' => $statusCode,
+                        //    // 'api_message' => $message,
+                        //    // 'logged_at' => now(),
+                        // ];
+
+
+                        $webhookUrl = 'https://5b7c-169-255-124-242.ngrok-free.app/api/handlewebook?' .
+                        http_build_query([
+                            'receiver' => $data['phone_number'],  // Also fixed 'reciever' typo
+                            'sender' => 'UBA',
+                            'request_id' => $data['db_id']
+                        ]);
+
+                                    Log::info("Webhook URL generated: $webhookUrl");
+
+                                    // $webhookResponse = Http::timeout(5)->post($webhookUrl, $webhookData);
+
+                                    // Log::info("Webhook response received:", [
+                                    //     'status' => $webhookResponse->status(),
+                                    //     'body' => $webhookResponse->body(),
+                                    //     'sent_data' => $webhookData
+                                    // ]);
+
+
+                                        // Dispatch the webhook request asynchronously
+                                dispatch(function () use ($webhookUrl, $data) {
+                                    try {
+                                        $response = Http::timeout(10)
+                                            ->retry(3, 100)
+                                            ->get($webhookUrl);
+
+                                        if ($response->successful()) {
+                                            Log::info("Webhook delivered successfully", [
+                                                'request_id' => $data['db_id']
+                                            ]);
+                                        } else {
+                                            Log::error("Webhook request failed", [
+                                                'status' => $response->status(),
+                                                'response' => $response->body(),
+                                            'request_id' => $data['db_id']
+                                            ]);
+                                        }
+                                    } catch (\Exception $e) {
+                                        Log::error("Webhook delivery failed: " . $e->getMessage(), [
+                                            'webhook_url' => $webhookUrl,
+                                        'request_id' => $data['db_id']
+                                        ]);
+                                    }
+                                })->afterResponse();
+
+
+                            // Close the cURL session
+                            curl_close($ch);
+
+
+
+                            // Return the response
+                            // Return the response and HTTP status code
+                            return [
+                                'body' => $response,
+                                'status_code' => $httpCode,
+                                'status' => $httpCode >= 200 && $httpCode < 300,
+                            ];
     }
-
-    curl_close($ch);
-
-    Log::info("API HTTP Status Code: $httpCode");
-    Log::info("API Raw Response: $response");
-
-    // NEW: Check for error patterns in the response body
-    $isApiSuccess = false;
-    $statusCode = null;
-    $message = null;
-    
-    // Check if response contains error patterns
-    if (strpos($response, 'Failed connect') !== false || 
-        strpos($response, 'Connection refused') !== false ||
-        strpos($response, 'Error:') !== false) {
-        
-        Log::error("API response contains error message", [
-            'response' => $response,
-            'request_id' => $data['request_id']
-        ]);
-        
-        $isApiSuccess = false;
-        $statusCode = 'ERROR';
-        $message = trim($response);
-    } else {
-        // Attempt to parse normal response format
-        $parts = explode(':', trim($response));
-        $statusCode = $parts[1] ?? 'UNKNOWN';
-        $message = $parts[2] ?? trim($response);
-        
-        // Consider success if HTTP 200 AND no error patterns found
-        $isApiSuccess = ($httpCode >= 200 && $httpCode < 300);
-    }
-
-    // Save result to database
-    try {
-        Sms::where('id', $data['request_id'])->update([
-            'status_code' => trim($statusCode),
-            'api_message' => trim($message),
-            'updated_at' => now(),
-        ]);
-    } catch (\Exception $e) {
-        Log::error("Failed to update SMS DB record after API call: " . $e->getMessage());
-    }
-
-    // Dispatch webhook (optional and asynchronous)
-    $webhookUrl = 'https://5b7c-169-255-124-242.ngrok-free.app/api/handlewebook?' . http_build_query([
-        'receiver' => $data['receiver'],
-        'sender' => $data['sender'],
-        'request_id' => $data['request_id'],
-    ]);
-
-    dispatch(function () use ($webhookUrl, $data) {
-        try {
-            $resp = Http::timeout(10)->retry(3, 100)->get($webhookUrl);
-            Log::info("Webhook sent for request_id {$data['request_id']}", ['status' => $resp->status()]);
-        } catch (\Exception $e) {
-            Log::error("Webhook failed: {$e->getMessage()}", ['url' => $webhookUrl]);
-        }
-    })->afterResponse();
-
-    return [
-        'status' => $isApiSuccess,
-        'body' => $response,
-        'error' => !$isApiSuccess ? "API Error: " . trim($response) : null,
-    ];
-}
-
 
 
 
@@ -596,52 +650,56 @@ public function saveSingleToDatabase(array $data, $isCustomMessage)
 public function sendSingleSmsWithSave(array $data, bool $isCustomMessage)
 {
     $data['date'] = date('Y-m-d');
-    Log::info("Data received for single SMS:", $data);
+    Log::info("Testing what is coming from the data ", $data);
 
     // Save to database and retrieve ID
     $dbId = $this->saveSingleToDatabase($data, $isCustomMessage);
 
     if (!$dbId) {
-        Log::error("Failed to save SMS to database", $data);
+        Log::error("Failed to save SMS to database for data: id is not found ", $data);
         return [
             'status' => false,
-            'error' => 'Failed to save SMS to database.',
+            'error' => 'Failed to save SMS to database. Id not found',
         ];
     }
 
     // Prepare SMS data with db_id
+    $data['db_id'] = $dbId;
     $smsData = [
         'text' => $data['message'],
         'receiver' => $data['phone_number'],
         'sender' => "UBA",
-        'request_id' => $dbId,
+        'request_id' => $data['db_id']
     ];
 
-    Log::info("Prepared SMS data for API send:", $smsData);
+    Log::info("Sending SMS with data: ", $smsData);
 
-    // Send SMS and capture response
-    $response = $this->sendSmsToApi($smsData);
+    // Send SMS and get response
+    $response = $this->sendSingleSms($smsData);
 
+
+
+    // Check the response status
     if ($response['status']) {
-        Log::info("SMS sent successfully to {$data['phone_number']} with request_id {$dbId}");
+        Log::info("SMS sent successfully to {$data['phone_number']} with request_id {$data['db_id']}");
         return [
             'status' => true,
             'message' => 'SMS sent successfully.',
-            'response' => $response['body'],
+            'response' => $response['body'], // Log response body on success
         ];
     } else {
-        Log::error("SMS send failed for {$data['phone_number']}", [
-            'api_error' => $response['error'] ?? 'Unknown error',
-            'raw_response' => $response['body'] ?? null,
-        ]);
+        Log::error("Error sending SMS to {$data['phone_number']}: " . $response['body']);
         return [
             'status' => false,
-            'error' => $response['error'] ?? 'Failed to send SMS.',
-            'response' => $response['body'] ?? null,
+            'error' => 'Failed to send SMS.',
+            'response' => $response['body'], // Include the error response
         ];
     }
-}
 
+
+
+
+}
 
 
 }

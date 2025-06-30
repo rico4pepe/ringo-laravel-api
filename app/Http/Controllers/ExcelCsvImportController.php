@@ -32,7 +32,7 @@ class ExcelCsvImportController extends Controller
             //Log::info('I am here');
 
             $validator = Validator::make($request->all(), [
-                'file' => 'required|file|mimes:csv,xlsx. xls',
+                'file' => 'required|file|mimes:csv,xlsx, xls',
                 'campaignTitle' => 'required_if:isScheduled,true|string',
                 'scheduleDate' => 'required_if:isScheduled,true|date',
                 'scheduleTime' => 'required_if:isScheduled,true|date_format:H:i'
