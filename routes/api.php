@@ -13,6 +13,7 @@ use App\Http\Controllers\SmsWebhookController;
 //use App\Http\Controllers\Testing;
 use App\Http\Controllers\GetSmsReportByDate;
 use App\Http\Controllers\DynamicSenderId;
+use App\Http\Controllers\MessageStatController;
 use Illuminate\Support\Facades\Log;
 
 //use Illuminate\Support\Facades\Mail;
@@ -80,6 +81,8 @@ Route::get('/handlewebook', [SmsWebhookController::class, 'handleWebhook'])->nam
 
 Route::get('/smsFilterByDate', [GetSmsReportByDate::class, 'getSmsByDate'])->name('smsFilter.send');
 Route::post('/dynamicSenderId', [DynamicSenderId::class, 'sendToDynamicSenderApi'])->name('sendToDynamic.send');
+Route::get('/message-stats', [MessageStatController::class, 'getMessageStats'])->name('messageStats.get');
+Route::get('/message-stats/export', [MessageStatController::class, 'exportCsv'])->name('messageStats.export');
 
 
 

@@ -60,6 +60,12 @@ return [
             'level' => env('LOG_LEVEL', 'debug'),
         ],
 
+         'sms_stats' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/sms_stats.log'),
+            'level' => 'info', // you can use 'info' or 'notice' if you prefer
+        ],
+
         'daily' => [
             'driver' => 'daily',
             'path' => storage_path('logs/laravel.log'),

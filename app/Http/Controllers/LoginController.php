@@ -16,56 +16,63 @@ use Illuminate\Support\Str;
 
 class LoginController extends Controller
 {
-    public function signin(Request $request)
-    {
-        // Validate request
-        $request->validate([
-            'email' => 'required|email',
-            'password' => 'required|min:6',
+   public function signin(Request $request)
+{
+    // Validate request
+    $request->validate([
+        'email' => 'required|email',
+        'password' => 'required|min:6',
+    ]);
+
+    // Try to find the user
+    $user = User::where('email', $request->email)->first();
+
+    if (!$user) {
+        return response()->json([
+            'success' => false,
+            'message' => 'No user found with this email address.',
+        ], 404);
+    }
+
+    if ($request->password !== $user->password) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Invalid password. Please try again.',
+        ], 401);
+    }
+
+    // Clear any existing OTPs
+    Otp::where('user_id', $user->id)->delete();
+
+    try {
+        // Generate OTP and expiry
+        $otp = random_int(100000, 999999);
+        $expiry = now()->addMinutes(60);
+
+        Otp::create([
+            'user_id' => $user->id,
+            'otp_code' => $otp,
+            'expires_at' => $expiry,
         ]);
 
-        // Check user credentials
-        $credentials = $request->only('email', 'password');
-        if (Auth::attempt($credentials)) {
-            $user = Auth::user();
+        Mail::to($user->email)->send(new OtpMail($otp, $expiry));
 
-            // Clear any existing or expired OTPs for this user
-            Otp::where('user_id', $user->id)->delete();
+        Log::info("OTP sent to user ID {$user->id}");
 
-            try {
-                // Generate OTP and expiry
-                $otp = random_int(100000, 999999);
-                $expiry = now()->addMinutes(5);
+        return response()->json([
+            'success' => true,
+            'message' => 'OTP sent to your email.',
+            'otp_required' => true,
+        ]);
+    } catch (Exception $e) {
+        Log::error("OTP sending failed: " . $e->getMessage());
 
-                // Create new OTP
-                Otp::create([
-                    'user_id' => $user->id,
-                    'otp_code' => $otp,
-                    'expires_at' => $expiry,
-                ]);
-
-                // Send OTP via email
-                Mail::to($user->email)->send(new OtpMail($otp, $expiry));
-
-                Log::info("OTP sent to user ID {$user->id}");
-
-                return response()->json([
-                    'success' => true,
-                    'message' => 'OTP sent to your email.',
-                    'otp_required' => true,
-                ]);
-            } catch (Exception $e) {
-                Log::error("Error sending OTP email to user ID {$user->id}: " . $e->getMessage());
-
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Failed to send OTP. Please try again later.',
-                ], 500);
-            }
-        }
-
-        return response()->json(['success' => false, 'message' => 'Login failed.'], 401);
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to send OTP. Please try again later.',
+        ], 500);
     }
+}
 
     public function verifyOtp(Request $request)
     {
@@ -144,7 +151,7 @@ class LoginController extends Controller
             $otp = Otp::create([
                 'user_id' => $user->id,
                 'otp_code' => random_int(100000, 999999),
-                'expires_at' => now()->addMinutes(5),
+                'expires_at' => now()->addMinutes(60),
             ]);
 
             // Send new OTP
@@ -159,7 +166,7 @@ class LoginController extends Controller
 
         } catch (Exception $e) {
             Log::error("Error resending OTP email to user ID {$user->id}: " . $e->getMessage());
-            Auth::logout();
+            //Auth::logout();
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to resend OTP. Please try again later.',
